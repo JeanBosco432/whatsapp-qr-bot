@@ -2,7 +2,8 @@ require("dotenv").config();
 
 const path = require("path");
 const express = require("express");
-const qrcode = require("qrcode-terminal");
+const qrcodeTerminal = require("qrcode-terminal");
+const QRCode = require("qrcode");
 const puppeteer = require("puppeteer");
 const { GoogleGenAI } = require("@google/genai");
 const { Client, LocalAuth } = require("whatsapp-web.js");
@@ -16,8 +17,8 @@ const ai = new GoogleGenAI({
 
 const isWindows = process.platform === "win32";
 
-// Windows local : dossier chrome téléchargé dans le projet
-// Linux/Render : navigateur installé par Puppeteer au build
+// Windows local : Chrome téléchargé dans le projet
+// Render / Linux : navigateur installé par Puppeteer
 const chromePath = isWindows
   ? path.join(
       __dirname,
@@ -34,6 +35,10 @@ console.log("Chemin Chrome utilisé :", chromePath);
 // Mémoire courte
 const conversations = new Map();
 const MAX_HISTORY = 8;
+
+// QR en mémoire
+let latestQr = null;
+let isReady = false;
 
 function getHistory(chatId) {
   if (!conversations.has(chatId)) {
@@ -71,7 +76,72 @@ app.get("/", (req, res) => {
 });
 
 app.get("/health", (req, res) => {
-  res.json({ status: "ok" });
+  res.json({
+    status: "ok",
+    ready: isReady,
+    platform: process.platform,
+  });
+});
+
+app.get("/qr", async (req, res) => {
+  try {
+    if (isReady) {
+      return res.send(`
+        <html>
+          <head><meta charset="utf-8"><title>QR WhatsApp</title></head>
+          <body style="font-family: Arial; text-align:center; padding:40px;">
+            <h2>Le bot est déjà connecté ✅</h2>
+          </body>
+        </html>
+      `);
+    }
+
+    if (!latestQr) {
+      return res.send(`
+        <html>
+          <head><meta charset="utf-8"><title>QR WhatsApp</title></head>
+          <body style="font-family: Arial; text-align:center; padding:40px;">
+            <h2>Aucun QR disponible pour le moment.</h2>
+            <p>Rechargez la page dans quelques secondes.</p>
+          </body>
+        </html>
+      `);
+    }
+
+    const qrImage = await QRCode.toDataURL(latestQr);
+
+    return res.send(`
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>QR WhatsApp Bot</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              text-align: center;
+              padding: 30px;
+              background: #f7f7f7;
+            }
+            img {
+              max-width: 90vw;
+              height: auto;
+              background: white;
+              padding: 20px;
+              border-radius: 12px;
+              box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            }
+          </style>
+        </head>
+        <body>
+          <h2>Scannez ce QR avec WhatsApp Business</h2>
+          <img src="${qrImage}" alt="QR Code WhatsApp" />
+        </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error("Erreur route /qr :", error);
+    res.status(500).send("Erreur lors de la génération du QR.");
+  }
 });
 
 const client = new Client({
@@ -88,11 +158,15 @@ const client = new Client({
 });
 
 client.on("qr", (qr) => {
+  latestQr = qr;
+  isReady = false;
   console.log("QR reçu, scannez-le avec WhatsApp Business :");
-  qrcode.generate(qr, { small: true });
+  qrcodeTerminal.generate(qr, { small: true });
 });
 
 client.on("ready", () => {
+  isReady = true;
+  latestQr = null;
   console.log("Bot prêt et connecté.");
 });
 
@@ -105,6 +179,7 @@ client.on("auth_failure", (msg) => {
 });
 
 client.on("disconnected", (reason) => {
+  isReady = false;
   console.log("Déconnecté :", reason);
 });
 
