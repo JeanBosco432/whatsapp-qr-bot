@@ -14,24 +14,24 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
-// Détection Render
-const isRender = !!process.env.RENDER;
+const isWindows = process.platform === "win32";
 
-// Chemin Chrome
-const chromePath = isRender
-  ? puppeteer.executablePath()
-  : path.join(
+// Windows local : dossier chrome téléchargé dans le projet
+// Linux/Render : navigateur installé par Puppeteer au build
+const chromePath = isWindows
+  ? path.join(
       __dirname,
       "chrome",
       "win64-147.0.7727.57",
       "chrome-win64",
       "chrome.exe"
-    );
+    )
+  : puppeteer.executablePath();
 
-console.log("Environnement Render :", isRender);
+console.log("Plateforme :", process.platform);
 console.log("Chemin Chrome utilisé :", chromePath);
 
-// Mémoire courte par utilisateur
+// Mémoire courte
 const conversations = new Map();
 const MAX_HISTORY = 8;
 
@@ -56,9 +56,7 @@ function addToHistory(chatId, role, text) {
 function buildConversationText(chatId) {
   const history = getHistory(chatId);
 
-  if (!history.length) {
-    return "Aucun historique récent.";
-  }
+  if (!history.length) return "Aucun historique récent.";
 
   return history
     .map((item) => {
@@ -192,7 +190,7 @@ client.on("message", async (message) => {
 
     addToHistory(chatId, "user", message.body);
 
-    if (texte === "bonjour" || texte === "salut" || texte === "hello" || texte === "cc") {
+    if (["bonjour", "salut", "hello", "cc"].includes(texte)) {
       const reply =
         "Bonjour 👋\n\nJean Bosco vous remercie pour votre message et vous répondra dès que possible.\n\nEn attendant, tapez *menu* pour découvrir l’espace lecture, discussion et divertissement.";
       await client.sendMessage(chatId, reply);
@@ -240,13 +238,7 @@ client.on("message", async (message) => {
       return;
     }
 
-    if (
-      texte === "5" ||
-      texte === "contact" ||
-      texte === "jean bosco" ||
-      texte === "agent" ||
-      texte === "humain"
-    ) {
+    if (["5", "contact", "jean bosco", "agent", "humain"].includes(texte)) {
       const reply =
         "Jean Bosco vous remercie pour votre message et vous répondra dès que possible.";
       await client.sendMessage(chatId, reply);
