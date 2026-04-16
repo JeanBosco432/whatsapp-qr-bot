@@ -3,6 +3,7 @@ require("dotenv").config();
 const path = require("path");
 const express = require("express");
 const qrcode = require("qrcode-terminal");
+const puppeteer = require("puppeteer");
 const { GoogleGenAI } = require("@google/genai");
 const { Client, LocalAuth } = require("whatsapp-web.js");
 
@@ -13,6 +14,24 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
+// Détection Render
+const isRender = !!process.env.RENDER;
+
+// Chemin Chrome
+const chromePath = isRender
+  ? puppeteer.executablePath()
+  : path.join(
+      __dirname,
+      "chrome",
+      "win64-147.0.7727.57",
+      "chrome-win64",
+      "chrome.exe"
+    );
+
+console.log("Environnement Render :", isRender);
+console.log("Chemin Chrome utilisé :", chromePath);
+
+// Mémoire courte par utilisateur
 const conversations = new Map();
 const MAX_HISTORY = 8;
 
@@ -48,17 +67,6 @@ function buildConversationText(chatId) {
     })
     .join("\n");
 }
-
-// chemin Chrome local du projet
-const chromePath = path.join(
-  __dirname,
-  "chrome",
-  "win64-147.0.7727.57",
-  "chrome-win64",
-  "chrome.exe"
-);
-
-console.log("Chemin Chrome utilisé :", chromePath);
 
 app.get("/", (req, res) => {
   res.send("Bot WhatsApp QR en ligne");
